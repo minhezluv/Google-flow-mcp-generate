@@ -1,9 +1,28 @@
 {
-  "name": "google-flow-browser-mcp",
+  "name": "@minhezluv/google-flow-mcp",
   "version": "1.0.0",
-  "description": "MCP server for Google Flow (labs.google/fx/tools/flow) via browser automation",
+  "description": "MCP server that generates images and Veo videos on Google Flow (flow.google.com) through browser automation",
   "type": "module",
   "main": "src/index.js",
+  "bin": {
+    "google-flow-mcp": "scripts/npx-entry.mjs",
+    "google-flow-chrome": "scripts/ensure-flow-chrome.mjs"
+  },
+  "files": [
+    "src/",
+    "config/flow.config.example.json",
+    "config/capabilities.json",
+    "scripts/*.mjs"
+  ],
+  "mcpName": "io.github.minhezluv/google-flow",
+  "keywords": ["mcp", "mcp-server", "google-flow", "veo", "nano-banana", "image-generation", "video-generation"],
+  "author": "nqminh",
+  "license": "MIT",
+  "homepage": "https://github.com/minhezluv/Google-flow-mcp-generate",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/minhezluv/Google-flow-mcp-generate.git"
+  },
   "scripts": {
     "start": "node src/index.js",
     "daemon": "node src/daemon/main.js",

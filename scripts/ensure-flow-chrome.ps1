@@ -2,10 +2,12 @@
 # Already up -> READY. Otherwise launches it DETACHED (survives the caller exiting)
 # and verifies. Single-line output for easy parsing. Portable via env vars.
 $CdpPort = 9222
-$UserDataDir = Join-Path $env:LOCALAPPDATA "FlowAutomationChrome"
-$FlowUrl = "https://labs.google/fx/tools/flow"
+$UserDataDir = Join-Path $env:USERPROFILE ".google-flow-mcp\edge-profile"
+$FlowUrl = "https://flow.google.com/"
 
 $ChromeCandidates = @(
+    (Join-Path ${env:ProgramFiles(x86)} "Microsoft\Edge\Application\msedge.exe"),
+    (Join-Path $env:ProgramFiles "Microsoft\Edge\Application\msedge.exe"),
     (Join-Path $env:ProgramFiles "Google\Chrome\Application\chrome.exe"),
     (Join-Path ${env:ProgramFiles(x86)} "Google\Chrome\Application\chrome.exe"),
     (Join-Path $env:LOCALAPPDATA "Google\Chrome\Application\chrome.exe")

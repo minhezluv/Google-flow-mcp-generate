@@ -2,7 +2,9 @@ import fs from 'fs';
 import path from 'path';
 
 let logStream = null;
-const LOG_DIR = path.resolve(import.meta.dirname, '../../logs');
+const LOG_DIR = process.env.FLOW_MCP_HOME
+  ? path.join(process.env.FLOW_MCP_HOME, 'logs')
+  : path.resolve(import.meta.dirname, '../../logs');
 
 function ensureLogDir() {
   if (!fs.existsSync(LOG_DIR)) {

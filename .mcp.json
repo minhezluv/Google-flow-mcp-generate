@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "google-flow": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/plugin-launch.mjs"],
+      "env": {
+        "FLOW_EXPECTED_ACCOUNT": "${user_config.expected_account}",
+        "FLOW_CDP_PORT": "${user_config.cdp_port}"
+      }
+    }
+  }
+}

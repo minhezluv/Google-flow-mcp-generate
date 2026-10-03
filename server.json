@@ -1,0 +1,45 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.minhezluv/google-flow",
+  "title": "Google Flow",
+  "description": "Generate images and Veo videos on Google Flow with your Google AI subscription",
+  "version": "1.0.0",
+  "websiteUrl": "https://github.com/minhezluv/Google-flow-mcp-generate",
+  "repository": {
+    "url": "https://github.com/minhezluv/Google-flow-mcp-generate",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@minhezluv/google-flow-mcp",
+      "version": "1.0.0",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "FLOW_EXPECTED_ACCOUNT",
+          "description": "Gmail address that must be signed in to Flow; jobs stop if another account is signed in",
+          "isRequired": false,
+          "format": "string"
+        },
+        {
+          "name": "FLOW_CDP_PORT",
+          "description": "Chrome DevTools port of the dedicated browser",
+          "isRequired": false,
+          "format": "number",
+          "default": "9222"
+        },
+        {
+          "name": "FLOW_MCP_HOME",
+          "description": "Directory for config, outputs, logs and the job store (default ~/.google-flow-mcp/home)",
+          "isRequired": false,
+          "format": "filepath"
+        }
+      ]
+    }
+  ]
+}

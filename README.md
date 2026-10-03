@@ -30,11 +30,73 @@ Service and may put your account at risk. **Use at your own risk, on your own ac
 
 ## Requirements
 
-- Node.js ≥ 18
-- Google Chrome (Chrome 149+ needs Playwright ≥ 1.61.1, already pinned)
+- Node.js ≥ 22 (with npm)
+- Google Chrome or Microsoft Edge (Chrome 149+ needs Playwright ≥ 1.61.1, already pinned)
 - A Google account with access to Flow (Google AI Pro recommended)
 
-## Setup
+## Install as a Claude Code plugin
+
+This repository is both a Claude Code plugin and a plugin marketplace. The plugin bundles the
+MCP server and the `google-flow-generate` skill.
+
+```bash
+claude plugin marketplace add minhezluv/Google-flow-mcp-generate
+claude plugin install google-flow@google-flow-mcp
+```
+
+Or inside a session: `/plugin marketplace add minhezluv/Google-flow-mcp-generate`, then
+`/plugin install google-flow@google-flow-mcp`.
+
+When the plugin is enabled, Claude Code asks for two optional settings:
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| Google account | empty | Gmail address that must be signed in to Flow; empty skips the check |
+| Browser debugging port | 9222 | CDP port of the dedicated browser |
+
+On the first tool call the server copies itself to the plugin data directory
+(`~/.claude/plugins/data/<plugin-id>/`), runs `npm ci` there (about a minute) and creates
+`home/config/flow.config.json`, where the remaining settings live. Outputs, logs and the job
+store are kept under that `home/` directory, so they survive plugin updates.
+
+Then ask Claude for an image or a video. The skill starts the dedicated browser with
+`scripts/ensure-flow-chrome.mjs` (Windows, macOS, Linux). On first use, sign in to Google in
+that window and click "Sign in to Flow"; the profile in `~/.google-flow-mcp/browser-profile`
+keeps the session.
+
+To try a local checkout without the marketplace: `claude --plugin-dir .`
+
+## Use with any MCP client (npm)
+
+The server is published on npm as `@minhezluv/google-flow-mcp` and listed in the
+[MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.minhezluv/google-flow`.
+Add it to your client's MCP configuration (Claude Desktop, Cursor, VS Code, …):
+
+```json
+{
+  "mcpServers": {
+    "google-flow": {
+      "command": "npx",
+      "args": ["-y", "@minhezluv/google-flow-mcp"],
+      "env": { "FLOW_EXPECTED_ACCOUNT": "you@gmail.com" }
+    }
+  }
+}
+```
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `FLOW_EXPECTED_ACCOUNT` | unset | Gmail address that must be signed in to Flow |
+| `FLOW_CDP_PORT` | 9222 | CDP port of the dedicated browser |
+| `FLOW_MCP_HOME` | `~/.google-flow-mcp/home` | Config, outputs, logs and job store |
+
+Before generating, start the dedicated browser and sign in to Google and Flow in it once:
+
+```bash
+npx -y -p @minhezluv/google-flow-mcp google-flow-chrome
+```
+
+## Manual setup (from a checkout)
 
 ```bash
 npm install
@@ -44,8 +106,9 @@ cp config/flow.config.example.json config/flow.config.json
 
 Start the dedicated Chrome (idempotent — launches only if needed):
 
-```powershell
-powershell -File scripts/ensure-flow-chrome.ps1
+```bash
+node scripts/ensure-flow-chrome.mjs        # any OS; --port, --profile, --browser optional
+powershell -File scripts/ensure-flow-chrome.ps1   # Windows-only original
 ```
 
 First run: in that Chrome window, sign in to your Google account **and** click
@@ -136,8 +199,23 @@ After updating, restart your MCP client so it loads the proxy version of the ser
 
 ## Claude Code skill
 
-`skill/SKILL.md` is a ready-to-use skill: drop it in `~/.claude/skills/google-flow-generate/`
-and Claude will pick the right tool, handle Chrome startup and fallbacks automatically.
+The plugin installs the skill automatically. Without the plugin, copy
+`skills/google-flow-generate/` to `~/.claude/skills/` and replace `${CLAUDE_PLUGIN_ROOT}` and
+`${user_config.cdp_port}` in its `SKILL.md` with your checkout path and port.
+
+## Releasing
+
+Keep these versions equal: `package.json`, `server.json` (`version` and `packages[0].version`)
+and `.claude-plugin/plugin.json`. Then:
+
+```bash
+npm test
+claude plugin validate --strict .
+npm publish --access public          # npm package used by npx and the MCP Registry
+mcp-publisher login github           # once; the account must be minhezluv
+mcp-publisher publish                # reads server.json
+git push                             # plugin marketplace users get the update
+```
 
 ## License
 

@@ -1,0 +1,36 @@
+{
+  "name": "google-flow",
+  "displayName": "Google Flow",
+  "version": "1.0.0",
+  "description": "Generate images and Veo videos with your Google AI Pro/Ultra subscription through Google Flow (flow.google.com), driven by browser automation. Images are free; videos use your Flow credits.",
+  "author": {
+    "name": "nqminh"
+  },
+  "homepage": "https://github.com/minhezluv/Google-flow-mcp-generate",
+  "repository": "https://github.com/minhezluv/Google-flow-mcp-generate",
+  "license": "MIT",
+  "keywords": [
+    "google-flow",
+    "veo",
+    "nano-banana",
+    "image-generation",
+    "video-generation",
+    "browser-automation"
+  ],
+  "userConfig": {
+    "expected_account": {
+      "type": "string",
+      "title": "Google account",
+      "description": "Gmail address that must be signed in to Flow. Jobs stop if another account is signed in. Leave empty to skip the check.",
+      "default": ""
+    },
+    "cdp_port": {
+      "type": "number",
+      "title": "Browser debugging port",
+      "description": "Chrome DevTools port of the dedicated browser the plugin drives.",
+      "default": 9222,
+      "min": 1024,
+      "max": 65535
+    }
+  }
+}

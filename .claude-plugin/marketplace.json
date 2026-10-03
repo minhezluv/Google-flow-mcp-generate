@@ -1,0 +1,14 @@
+{
+  "name": "google-flow-mcp",
+  "description": "Google Flow image and video generation for Claude Code",
+  "owner": {
+    "name": "nqminh"
+  },
+  "plugins": [
+    {
+      "name": "google-flow",
+      "source": "./",
+      "description": "Generate images and Veo videos through Google Flow with your Google AI subscription"
+    }
+  ]
+}
