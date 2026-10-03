@@ -111,7 +111,12 @@ export class FlowSession {
     await pickers.nth(section).click();
     const item = this.page.locator('[role="menuitem"]').filter({ hasText: new RegExp(`${escape(flowModel)}\\s*$`, 'u') }).first();
     await item.click({ timeout: 10_000 }).catch(async () => { throw await this.uiChanged(`Flow has no ${kind} model "${flowModel}"`, 'no-model-item'); });
-    const shown = (await pickers.nth(section).innerText()).replace(ICONS.dropdown, '').trim();
+    // The picker label updates a moment after the menu item is clicked.
+    let shown = '';
+    for (const deadline = Date.now() + 5_000; ; await this.page.waitForTimeout(250)) {
+      shown = (await pickers.nth(section).innerText()).replace(ICONS.dropdown, '').trim();
+      if (shown.endsWith(flowModel) || Date.now() > deadline) break;
+    }
     if (!shown.endsWith(flowModel)) throw await this.uiChanged(`Flow shows model "${shown}" instead of "${flowModel}"`, 'model-not-selected');
 
     await this.page.locator('button').filter({ hasText: exactText(LABELS.save) }).last().click();
@@ -125,8 +130,10 @@ export class FlowSession {
     for (let attempt = 0; await chips.count(); attempt += 1) {
       if (attempt >= 20) throw await this.uiChanged('Old ingredient chips could not be removed from the prompt', 'chips-not-cleared');
       const chip = chips.first();
-      await chip.hover();
-      await chip.locator('mat-icon').filter({ hasText: /^cancel$/u }).click();
+      // A chip can vanish on its own (Flow clears it after a new session); the loop re-counts.
+      await chip.hover({ timeout: 5_000 })
+        .then(() => chip.locator('mat-icon').filter({ hasText: /^cancel$/u }).click({ timeout: 5_000 }))
+        .catch(() => this.page.waitForTimeout(500));
     }
     const box = this.page.locator('[contenteditable="true"]').last();
     await box.click();
@@ -155,18 +162,24 @@ export class FlowSession {
         // A new entry appears at once as a placeholder; it is selectable only once its thumbnail loads.
         await this.page.waitForFunction(({ name, before }) => {
           const items = [...document.querySelectorAll('.asset-item')].filter((el) => el.innerText.includes(name));
-          return items.length > before && items.every((el) => el.querySelector('img[src*="flow-content.google/"]'));
+          return items.length > before && items.every((el) => el.querySelector('img[src*="flow-content.google/"], img[src*="flow.google.com/asb/"]'));
       }, { name, before }, { timeout: 120_000 })
         .catch(async () => { throw await this.uiChanged(`Uploaded ${name} never finished in the ingredient picker`, 'upload-not-listed'); });
       }
       const asset = named.first();
       await asset.click();
       const confirm = this.page.locator('button').filter({ hasText: exactText(LABELS.addToPrompt) }).first();
-      // Selecting a previous upload attaches it immediately and closes the picker.
-      if (before > 0 && !(await confirm.isVisible().catch(() => false))) {
-        await this.page.waitForFunction((count) => [...document.querySelectorAll('button.chip-container')].filter(el => [...el.querySelectorAll('mat-icon')].some(icon => icon.textContent.trim() === 'cancel')).length === count + 1, chipCount, { timeout: 5_000 });
-        continue;
-      }
+      // Selecting a previous upload may attach it immediately and close the picker, a moment
+      // after the click; wait for either that new chip or the "Add to prompt" button.
+      const attached = await this.page.waitForFunction(({ count, labels }) => {
+        const chips = [...document.querySelectorAll('button.chip-container')]
+          .filter((el) => [...el.querySelectorAll('mat-icon')].some((icon) => icon.textContent.trim() === 'cancel')).length;
+        if (chips > count) return 'chip';
+        return [...document.querySelectorAll('button')].some((b) => labels.includes(b.innerText.trim()) && b.offsetParent) ? 'confirm' : false;
+      }, { count: chipCount, labels: LABELS.addToPrompt }, { timeout: 15_000 })
+        .then((handle) => handle.jsonValue())
+        .catch(async () => { throw await this.uiChanged(`Selecting ${name} neither attached it nor offered "Add to prompt"`, 'upload-not-attached'); });
+      if (attached === 'chip') continue;
       await this.page.waitForFunction((el) => el.classList.contains('asset-item-active'), await asset.elementHandle(), { timeout: 5_000 })
         .catch(async () => { throw await this.uiChanged(`Could not select ${name} in the ingredient picker`, 'upload-not-selected'); });
       await this.page.waitForFunction((el) => !el.disabled, await confirm.elementHandle(), { timeout: 30_000 });
@@ -196,27 +209,48 @@ export class FlowSession {
   // generatedOnly: agent results only, read from the chat's <flow-a2ui-image-option> and
   // <flow-a2ui-video-option> elements (uploaded ingredients also become project media and must
   // never count as results). A video option shows an image thumbnail with the video's uuid.
+  // Flow may serve media through opaque flow.google.com/asb/ URLs with no uuid in them. The grid
+  // tile's <img data-media-id> then carries the uuid, and a chat option shares its tile's src.
   async mediaSnapshot({ generatedOnly = false } = {}) {
-    if (!generatedOnly) {
-      const urls = await this.page.evaluate(() => [...document.querySelectorAll('img,video,source')]
-        .flatMap((el) => [el.currentSrc, el.src, el.getAttribute('poster')]).filter(Boolean));
-      return extractMedia(urls);
-    }
-    const options = await this.page.evaluate(() => [...document.querySelectorAll('flow-a2ui-image-option img, flow-a2ui-video-option img')]
-      .map((img) => ({ kind: img.closest('flow-a2ui-video-option') ? 'video' : 'image', url: img.currentSrc || img.src })));
+    const { urls, tiles, options } = await this.page.evaluate(() => {
+      const src = (img) => img.currentSrc || img.src;
+      return {
+        urls: [...document.querySelectorAll('img,video,source')]
+          .flatMap((el) => [el.currentSrc, el.src, el.getAttribute('poster')]).filter(Boolean),
+        tiles: [...document.querySelectorAll('img[data-media-id]')]
+          .map((img) => ({ kind: img.closest('flow-video-tile') ? 'video' : 'image', uuid: img.dataset.mediaId, url: src(img) })),
+        options: [...document.querySelectorAll('flow-a2ui-image-option img, flow-a2ui-video-option img')]
+          .map((img) => ({ kind: img.closest('flow-a2ui-video-option') ? 'video' : 'image', url: src(img) })),
+      };
+    });
     const byUuid = new Map();
+    if (!generatedOnly) {
+      for (const item of [...extractMedia(urls), ...tiles]) if (!byUuid.has(item.uuid)) byUuid.set(item.uuid, item);
+      return [...byUuid.values()];
+    }
     for (const { kind, url } of options) {
-      for (const item of extractMedia([url])) if (!byUuid.has(item.uuid)) byUuid.set(item.uuid, { ...item, kind });
+      const tile = tiles.find((t) => t.url === url);
+      const items = extractMedia([url]);
+      if (items.length === 0 && tile) items.push({ uuid: tile.uuid, url });
+      for (const item of items) if (!byUuid.has(item.uuid)) byUuid.set(item.uuid, { ...item, kind });
     }
     return [...byUuid.values()];
   }
 
   // The signed video URL is only put on the grid tile's <video> once the tile is hovered.
-  async #videoUrl(uuid) {
+  // With opaque flow.google.com/asb/ URLs the tile is found by its thumbnail src (the chat option's
+  // url) and its <video> carries no uuid either. The grid is virtualized: scroll it to the top first.
+  async #videoUrl({ uuid, url }) {
     await this.dismissOverlays();
-    const tile = this.page.locator('flow-video-tile').filter({ has: this.page.locator(`img[src*="${uuid}"], video[src*="${uuid}"]`) }).first();
+    await this.page.evaluate(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      document.querySelector('.cdk-virtual-scrollable.page-container')?.scrollTo({ top: 0, behavior: 'instant' });
+    });
+    const match = [`img[src*="${uuid}"]`, `video[src*="${uuid}"]`, `img[data-media-id="${uuid}"]`];
+    if (url && !extractMedia([url]).length) match.push(`img[src=${JSON.stringify(url)}]`);
+    const tile = this.page.locator('flow-video-tile').filter({ has: this.page.locator(match.join(', ')) }).first();
     await tile.hover({ timeout: 15_000 });
-    const video = this.page.locator(`video[src*="/video/${uuid}"]`).first();
+    const video = tile.locator('video[src]').first();
     await video.waitFor({ state: 'attached', timeout: 15_000 });
     return video.getAttribute('src');
   }
@@ -263,8 +297,8 @@ export class FlowSession {
 
   async download(media, outputDir) {
     let url = media.url;
-    if (media.kind === 'video' && !url.includes('/video/')) {
-      url = await this.#videoUrl(media.uuid).catch((err) => {
+    if (media.kind === 'video' && !media.playable && !url.includes('/video/')) {
+      url = await this.#videoUrl(media).catch((err) => {
         throw new FlowError(ErrorCodes.DOWNLOAD_FAILED, `No playable video for ${media.uuid}: ${err.message}`, { mediaUuids: [media.uuid] });
       });
     }
@@ -304,7 +338,7 @@ export class FlowSession {
   }
 
   async verifyMediaModel(media, expected) {
-    const url = media.kind === 'video' && !media.url.includes('/video/') ? await this.#videoUrl(media.uuid) : media.url;
+    const url = media.kind === 'video' && !media.playable && !media.url.includes('/video/') ? await this.#videoUrl(media) : media.url;
     const models = new Map();
     let responses = 0;
     const onResponse = response => {
@@ -327,7 +361,8 @@ export class FlowSession {
       const actual = models.get(media.uuid);
       if (!actual) throw new DaemonError(JobErrorCodes.UI_CHANGED, 'Persisted media metadata has no unambiguous model', { mediaUuid: media.uuid });
       if (actual !== expected) throw new DaemonError(JobErrorCodes.UNSUPPORTED_INPUT, `Flow generated media with ${actual}, requested ${expected}; no automatic resubmission`, { mediaUuid: media.uuid, actualModel: actual, requestedModel: expected });
-      return { ...media, url };
+      // playable: url is now the resolved video source, not the chat thumbnail.
+      return { ...media, url, playable: true };
     } finally {
       this.page.off('response', onResponse);
     }

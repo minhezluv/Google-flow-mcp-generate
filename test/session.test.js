@@ -15,7 +15,7 @@ test('reuses a matching uploaded asset without waiting for a duplicate entry', a
       if (selector === 'button') return { filter: () => ({ first: () => confirm }) };
       throw new Error(`Unexpected locator ${selector}`);
     },
-    waitForTimeout: async () => {}, waitForFunction: async () => {},
+    waitForTimeout: async () => {}, waitForFunction: async () => ({ jsonValue: async () => 'chip' }),
     waitForEvent: async () => { throw new Error('Existing content must not be uploaded again'); },
   };
   const session = new FlowSession(page, { registryFile: 'unused' });
