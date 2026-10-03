@@ -10,14 +10,36 @@ description: |
 
 # Google Flow Generate
 
-Runbook for the `google-flow` MCP server bundled with this plugin. Its tools are named
-`flow_*` (in tool lists they appear with the plugin's MCP prefix, for example
-`mcp__plugin_google-flow_google-flow__flow_generate_image`).
+Runbook for the `google-flow` MCP server. Its tools are named `flow_*`; in tool lists
+they carry an MCP prefix, such as `mcp__google-flow__flow_generate_image` or, when
+installed as a plugin, `mcp__plugin_google-flow_google-flow__flow_generate_image`.
+
+## Setup check
+
+If no `flow_*` tools are available, the MCP server is not installed. Tell the user to
+install it one of these ways, then restart the client, and stop:
+- Claude Code plugin (server and this skill):
+  `claude plugin marketplace add minhezluv/Google-flow-mcp-generate` then
+  `claude plugin install google-flow@google-flow-mcp`
+- Any MCP client: add a server named `google-flow` with command `npx` and args
+  `["-y", "@minhezluv/google-flow-mcp"]`; optional env `FLOW_EXPECTED_ACCOUNT`
+  (Gmail address) and `FLOW_CDP_PORT` (default 9222).
+
+Requires Node.js 22+ and Chrome or Edge. Details:
+https://github.com/minhezluv/Google-flow-mcp-generate
 
 ## Step 0: make sure the dedicated browser is up (always first)
 
+When this skill came with the plugin, run:
+
 ```
 node "${CLAUDE_PLUGIN_ROOT}/scripts/ensure-flow-chrome.mjs" --port ${user_config.cdp_port}
+```
+
+Otherwise (the path above was not filled in), run:
+
+```
+npx -y -p @minhezluv/google-flow-mcp google-flow-chrome --port 9222
 ```
 
 - `READY` or `LAUNCHED`: continue.
